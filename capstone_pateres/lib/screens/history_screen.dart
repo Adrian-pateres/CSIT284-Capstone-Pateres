@@ -11,6 +11,10 @@ class HistoryScreen extends StatelessWidget {
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  String _formatDate(DateTime dt) {
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,20 +26,59 @@ class HistoryScreen extends StatelessWidget {
               child: Text('No borrow or return history yet.'),
             )
           : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: historyList.length,
               itemBuilder: (context, index) {
                 final record = historyList[index];
                 final isBorrow = record.action == 'Borrowed';
-                return ListTile(
-                  leading: Icon(
-                    isBorrow ? Icons.arrow_upward : Icons.arrow_downward,
-                    color: isBorrow ? Colors.orange : Colors.green,
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isBorrow
+                          ? Colors.orange.shade100
+                          : Colors.green.shade100,
+                      child: Icon(
+                        isBorrow ? Icons.arrow_upward : Icons.arrow_downward,
+                        color: isBorrow
+                            ? Colors.orange.shade800
+                            : Colors.green.shade800,
+                      ),
+                    ),
+                    title: Text(
+                      record.bookTitle,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Borrower: ${record.borrowerName}'),
+                        Text('Logged: ${_formatDateTime(record.timestamp)}'),
+                        if (isBorrow && record.dueDate != null)
+                          Text(
+                            'Due Date: ${_formatDate(record.dueDate!)}',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                    trailing: Chip(
+                      label: Text(
+                        record.action,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isBorrow
+                              ? Colors.orange.shade900
+                              : Colors.green.shade900,
+                        ),
+                      ),
+                      backgroundColor: isBorrow
+                          ? Colors.orange.shade50
+                          : Colors.green.shade50,
+                    ),
                   ),
-                  title: Text(record.bookTitle),
-                  subtitle: Text(
-                    '${record.action} by ${record.borrowerName}\nDate: ${_formatDateTime(record.timestamp)}',
-                  ),
-                  isThreeLine: true,
                 );
               },
             ),
