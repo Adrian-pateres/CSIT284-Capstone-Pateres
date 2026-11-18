@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_pateres/models/book.dart';
 import 'package:capstone_pateres/widgets/book_card.dart';
-import 'package:capstone_pateres/screens/book_detail_screen.dart';
-import 'package:capstone_pateres/screens/history_screen.dart';
+import 'book_detail_screen.dart';
+import 'history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,6 +13,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final List<Book> _books = dummyBooks;
+  final TextEditingController _searchController = TextEditingController();
   final List<BorrowHistory> _history = [
     BorrowHistory(
       bookTitle: 'The Pragmatic Programmer',
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   String _searchQuery = '';
+  String _selectedFilter = 'All'; // 'All', 'Available', 'Borrowed'
 
   void _updateBookStatus(Book book, String borrowerName, bool borrow) {
     setState(() {
@@ -61,12 +63,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final availableCount = _books.where((b) => !b.isBorrowed).length;
+    final borrowedCount = _books.where((b) => b.isBorrowed).length;
+
     final filteredBooks = _books.where((book) {
       final query = _searchQuery.toLowerCase();
-      return book.title.toLowerCase().contains(query) ||
+      final matchesSearch = book.title.toLowerCase().contains(query) ||
           book.author.toLowerCase().contains(query) ||
           book.category.toLowerCase().contains(query);
+
+      if (_selectedFilter == 'Available') {
+        return matchesSearch && !book.isBorrowed;
+      } else if (_selectedFilter == 'Borrowed') {
+        return matchesSearch && book.isBorrowed;
+      }
+      return matchesSearch;
     }).toList();
 
     return Scaffold(
@@ -90,12 +108,24 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
-              decoration: const InputDecoration(
+              controller: _searchController,
+              decoration: InputDecoration(
                 hintText: 'Search books by title, author, or category...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) {
                 setState(() {
@@ -104,6 +134,31 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('All (${_books.length})'),
+                  selected: _selectedFilter == 'All',
+                  onSelected: (_) => setState(() => _selectedFilter = 'All'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Available ($availableCount)'),
+                  selected: _selectedFilter == 'Available',
+                  onSelected: (_) => setState(() => _selectedFilter = 'Available'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Borrowed ($borrowedCount)'),
+                  selected: _selectedFilter == 'Borrowed',
+                  onSelected: (_) => setState(() => _selectedFilter = 'Borrowed'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: filteredBooks.isEmpty
                 ? const Center(child: Text('No matching books found.'))
