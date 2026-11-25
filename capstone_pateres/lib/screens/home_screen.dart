@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Sync with Firebase',
+            tooltip: 'Sync with Database',
             onPressed: _isLoading ? null : _loadData,
           ),
           IconButton(
