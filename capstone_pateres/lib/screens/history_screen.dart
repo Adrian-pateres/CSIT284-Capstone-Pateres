@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_pateres/models/book.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   final List<BorrowHistory> historyList;
+  final Future<void> Function() onClearHistory;
 
-  const HistoryScreen({super.key, required this.historyList});
+  const HistoryScreen({
+    super.key,
+    required this.historyList,
+    required this.onClearHistory,
+  });
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  bool _isClearing = false;
 
   String _formatDateTime(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
@@ -15,24 +27,81 @@ class HistoryScreen extends StatelessWidget {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _confirmClear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear History'),
+        content:
+            const Text('Are you sure you want to delete all history records?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isClearing = true);
+    try {
+      await widget.onClearHistory();
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('History cleared from Firebase.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to clear history: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isClearing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Borrowing History'),
+        actions: [
+          if (widget.historyList.isNotEmpty)
+            IconButton(
+              icon: _isClearing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_outline),
+              tooltip: 'Clear History',
+              onPressed: _isClearing ? null : _confirmClear,
+            ),
+        ],
       ),
-      body: historyList.isEmpty
+      body: widget.historyList.isEmpty
           ? const Center(
               child: Text('No borrow or return history yet.'),
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: historyList.length,
+              itemCount: widget.historyList.length,
               itemBuilder: (context, index) {
-                final record = historyList[index];
+                final record = widget.historyList[index];
                 final isBorrow = record.action == 'Borrowed';
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: isBorrow

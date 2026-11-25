@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_pateres/models/book.dart';
+import 'package:capstone_pateres/services/firebase_service.dart';
 import 'package:capstone_pateres/widgets/book_card.dart';
 import 'package:capstone_pateres/screens/book_detail_screen.dart';
 import 'package:capstone_pateres/screens/history_screen.dart';
@@ -12,53 +13,70 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<Book> _books = dummyBooks;
+  final FirebaseService _firebaseService = FirebaseService();
   final TextEditingController _searchController = TextEditingController();
-  final List<BorrowHistory> _history = [
-    BorrowHistory(
-      bookTitle: 'The Pragmatic Programmer',
-      borrowerName: 'Juan Dela Cruz',
-      action: 'Borrowed',
-      timestamp: DateTime.now().subtract(const Duration(days: 2)),
-      dueDate: DateTime.now().add(const Duration(days: 5)),
-    ),
-  ];
+
+  List<Book> _books = [];
+  List<BorrowHistory> _history = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   String _searchQuery = '';
-  String _selectedFilter = 'All'; // 'All', 'Available', 'Borrowed'
+  String _selectedFilter = 'All';
 
-  void _updateBookStatus(Book book, String borrowerName, bool borrow) {
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
     setState(() {
-      if (borrow) {
-        book.isBorrowed = true;
-        book.borrowerName = borrowerName;
-        book.borrowedDate = DateTime.now();
-        book.dueDate = DateTime.now().add(const Duration(days: 7));
-        _history.insert(
-          0,
-          BorrowHistory(
-            bookTitle: book.title,
-            borrowerName: borrowerName,
-            action: 'Borrowed',
-            timestamp: DateTime.now(),
-            dueDate: book.dueDate,
-          ),
-        );
-      } else {
-        book.isBorrowed = false;
-        book.borrowerName = null;
-        book.borrowedDate = null;
-        book.dueDate = null;
-        _history.insert(
-          0,
-          BorrowHistory(
-            bookTitle: book.title,
-            borrowerName: borrowerName,
-            action: 'Returned',
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final books = await _firebaseService.fetchBooks();
+      final history = await _firebaseService.fetchHistory();
+      if (!mounted) return;
+      setState(() {
+        _books = books;
+        _history = history;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to connect to Firebase: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _updateBookStatus(
+      Book book, String borrowerName, bool borrow) async {
+    await _firebaseService.updateBookStatus(book, borrowerName, borrow);
+    final updatedBooks = await _firebaseService.fetchBooks();
+    final updatedHistory = await _firebaseService.fetchHistory();
+
+    if (!mounted) return;
+    setState(() {
+      _books = updatedBooks;
+      _history = updatedHistory;
+      final refreshedBook = _books.firstWhere((b) => b.id == book.id);
+      book.isBorrowed = refreshedBook.isBorrowed;
+      book.borrowerName = refreshedBook.borrowerName;
+      book.borrowedDate = refreshedBook.borrowedDate;
+      book.dueDate = refreshedBook.dueDate;
+    });
+  }
+
+  Future<void> _clearHistory() async {
+    await _firebaseService.clearHistory();
+    if (!mounted) return;
+    setState(() {
+      _history = [];
     });
   }
 
@@ -92,99 +110,137 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Book Borrowing Tracker'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Sync with Firebase',
+            onPressed: _isLoading ? null : _loadData,
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Borrow History',
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => HistoryScreen(historyList: _history),
+                  builder: (context) => HistoryScreen(
+                    historyList: _history,
+                    onClearHistory: _clearHistory,
+                  ),
                 ),
               );
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search books by title, author, or category...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _loadData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Search books by title, author, or category...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          border: const OutlineInputBorder(),
+                        ),
+                        onChanged: (value) {
                           setState(() {
-                            _searchQuery = '';
+                            _searchQuery = value;
                           });
                         },
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-            child: Row(
-              children: [
-                ChoiceChip(
-                  label: Text('All (${_books.length})'),
-                  selected: _selectedFilter == 'All',
-                  onSelected: (_) => setState(() => _selectedFilter = 'All'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text('Available ($availableCount)'),
-                  selected: _selectedFilter == 'Available',
-                  onSelected: (_) => setState(() => _selectedFilter = 'Available'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text('Borrowed ($borrowedCount)'),
-                  selected: _selectedFilter == 'Borrowed',
-                  onSelected: (_) => setState(() => _selectedFilter = 'Borrowed'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: filteredBooks.isEmpty
-                ? const Center(child: Text('No matching books found.'))
-                : ListView.builder(
-                    itemCount: filteredBooks.length,
-                    itemBuilder: (context, index) {
-                      final book = filteredBooks[index];
-                      return BookCard(
-                        book: book,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BookDetailScreen(
-                                book: book,
-                                onStatusChanged: _updateBookStatus,
-                              ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 4.0),
+                      child: Row(
+                        children: [
+                          ChoiceChip(
+                            label: Text('All (${_books.length})'),
+                            selected: _selectedFilter == 'All',
+                            onSelected: (_) =>
+                                setState(() => _selectedFilter = 'All'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: Text('Available ($availableCount)'),
+                            selected: _selectedFilter == 'Available',
+                            onSelected: (_) =>
+                                setState(() => _selectedFilter = 'Available'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: Text('Borrowed ($borrowedCount)'),
+                            selected: _selectedFilter == 'Borrowed',
+                            onSelected: (_) =>
+                                setState(() => _selectedFilter = 'Borrowed'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: filteredBooks.isEmpty
+                          ? const Center(
+                              child: Text('No matching books found.'))
+                          : ListView.builder(
+                              itemCount: filteredBooks.length,
+                              itemBuilder: (context, index) {
+                                final book = filteredBooks[index];
+                                return BookCard(
+                                  book: book,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => BookDetailScreen(
+                                          book: book,
+                                          onStatusChanged: _updateBookStatus,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
+                    ),
+                  ],
+                ),
     );
   }
 }

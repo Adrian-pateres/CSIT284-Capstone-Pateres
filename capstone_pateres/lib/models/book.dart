@@ -20,22 +20,77 @@ class Book {
     this.borrowedDate,
     this.dueDate,
   });
+
+  factory Book.fromJson(String id, Map<String, dynamic> json) {
+    return Book(
+      id: id,
+      title: json['title'] ?? '',
+      author: json['author'] ?? '',
+      category: json['category'] ?? '',
+      description: json['description'] ?? '',
+      isBorrowed: json['isBorrowed'] ?? false,
+      borrowerName: json['borrowerName'],
+      borrowedDate: json['borrowedDate'] != null
+          ? DateTime.tryParse(json['borrowedDate'])
+          : null,
+      dueDate:
+          json['dueDate'] != null ? DateTime.tryParse(json['dueDate']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'author': author,
+      'category': category,
+      'description': description,
+      'isBorrowed': isBorrowed,
+      'borrowerName': borrowerName,
+      'borrowedDate': borrowedDate?.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+    };
+  }
 }
 
 class BorrowHistory {
+  final String? id;
   final String bookTitle;
   final String borrowerName;
-  final String action; // 'Borrowed' or 'Returned'
+  final String action;
   final DateTime timestamp;
   final DateTime? dueDate;
 
   BorrowHistory({
+    this.id,
     required this.bookTitle,
     required this.borrowerName,
     required this.action,
     required this.timestamp,
     this.dueDate,
   });
+
+  factory BorrowHistory.fromJson(String id, Map<String, dynamic> json) {
+    return BorrowHistory(
+      id: id,
+      bookTitle: json['bookTitle'] ?? '',
+      borrowerName: json['borrowerName'] ?? '',
+      action: json['action'] ?? '',
+      timestamp:
+          DateTime.tryParse(json['timestamp'] ?? '') ?? DateTime.now(),
+      dueDate:
+          json['dueDate'] != null ? DateTime.tryParse(json['dueDate']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'bookTitle': bookTitle,
+      'borrowerName': borrowerName,
+      'action': action,
+      'timestamp': timestamp.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+    };
+  }
 }
 
 final List<Book> dummyBooks = [
@@ -44,7 +99,8 @@ final List<Book> dummyBooks = [
     title: 'Clean Code',
     author: 'Robert C. Martin',
     category: 'Software Engineering',
-    description: 'A handbook of agile software craftsmanship and writing maintainable code.',
+    description:
+        'A handbook of agile software craftsmanship and writing maintainable code.',
   ),
   Book(
     id: 'B002',
@@ -69,48 +125,55 @@ final List<Book> dummyBooks = [
     title: 'Flutter Apprentice',
     author: 'Michael Katz et al.',
     category: 'Mobile Development',
-    description: 'Learn to build cross-platform mobile apps using Flutter and Dart.',
+    description:
+        'Learn to build cross-platform mobile apps using Flutter and Dart.',
   ),
   Book(
     id: 'B005',
     title: 'Introduction to Algorithms',
     author: 'Thomas H. Cormen',
     category: 'Computer Science',
-    description: 'Comprehensive textbook covering data structures and algorithms.',
+    description:
+        'Comprehensive textbook covering data structures and algorithms.',
   ),
   Book(
     id: 'B006',
     title: 'Database System Concepts',
     author: 'Abraham Silberschatz',
     category: 'Database',
-    description: 'Foundational concepts of relational databases, SQL, and system architecture.',
+    description:
+        'Foundational concepts of relational databases, SQL, and system architecture.',
   ),
   Book(
     id: 'B007',
     title: 'Artificial Intelligence: A Modern Approach',
     author: 'Stuart Russell & Peter Norvig',
     category: 'AI & Data Science',
-    description: 'Standard guide to intelligent agents, machine learning, and robotics.',
+    description:
+        'Standard guide to intelligent agents, machine learning, and robotics.',
   ),
   Book(
     id: 'B008',
     title: 'Computer Networking: A Top-Down Approach',
     author: 'James Kurose & Keith Ross',
     category: 'Networking',
-    description: 'Explores internet protocols, application layers, and network security.',
+    description:
+        'Explores internet protocols, application layers, and network security.',
   ),
   Book(
     id: 'B009',
     title: 'Operating System Concepts',
     author: 'Abraham Silberschatz',
     category: 'Systems',
-    description: 'Covers processes, memory management, threads, and storage systems.',
+    description:
+        'Covers processes, memory management, threads, and storage systems.',
   ),
   Book(
     id: 'B010',
     title: 'Refactoring',
     author: 'Martin Fowler',
     category: 'Software Engineering',
-    description: 'Improving the design of existing code safely and effectively.',
+    description:
+        'Improving the design of existing code safely and effectively.',
   ),
 ];

@@ -3,7 +3,7 @@ import 'package:capstone_pateres/models/book.dart';
 
 class BookDetailScreen extends StatefulWidget {
   final Book book;
-  final Function(Book, String, bool) onStatusChanged;
+  final Future<void> Function(Book, String, bool) onStatusChanged;
 
   const BookDetailScreen({
     super.key,
@@ -17,29 +17,56 @@ class BookDetailScreen extends StatefulWidget {
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
   final TextEditingController _borrowerController = TextEditingController();
+  bool _isSaving = false;
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  void _handleBorrow() {
+  Future<void> _handleBorrow() async {
     final name = _borrowerController.text.trim().isEmpty
         ? 'Student Borrower'
         : _borrowerController.text.trim();
-    widget.onStatusChanged(widget.book, name, true);
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Borrowed "${widget.book.title}" successfully!')),
-    );
+
+    setState(() => _isSaving = true);
+    try {
+      await widget.onStatusChanged(widget.book, name, true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Borrowed "${widget.book.title}" successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving to Firebase: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
-  void _handleReturn() {
+  Future<void> _handleReturn() async {
     final previousBorrower = widget.book.borrowerName ?? 'Student Borrower';
-    widget.onStatusChanged(widget.book, previousBorrower, false);
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Returned "${widget.book.title}" successfully!')),
-    );
+
+    setState(() => _isSaving = true);
+    try {
+      await widget.onStatusChanged(widget.book, previousBorrower, false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Returned "${widget.book.title}" successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating Firebase: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -116,14 +143,24 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _handleReturn,
-                  icon: const Icon(Icons.assignment_return),
-                  label: const Text('Return Book'),
+                  onPressed: _isSaving ? null : _handleReturn,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.assignment_return),
+                  label: Text(_isSaving ? 'Updating...' : 'Return Book'),
                 ),
               ),
             ] else ...[
               TextField(
                 controller: _borrowerController,
+                enabled: !_isSaving,
                 decoration: const InputDecoration(
                   labelText: 'Student Name or ID',
                   border: OutlineInputBorder(),
@@ -134,9 +171,19 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _handleBorrow,
-                  icon: const Icon(Icons.book),
-                  label: const Text('Borrow Book (7 Days Due)'),
+                  onPressed: _isSaving ? null : _handleBorrow,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.book),
+                  label: Text(
+                      _isSaving ? 'Saving...' : 'Borrow Book (7 Days Due)'),
                 ),
               ),
             ],
